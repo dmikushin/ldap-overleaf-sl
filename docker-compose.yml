@@ -178,7 +178,7 @@ services:
   autossh:
     image: autossh
     environment:
-      - SSH_REMOTE_USER=${SSH_REMOVE_USER}
+      - SSH_REMOTE_USER=${SSH_REMOTE_USER}
       - SSH_REMOTE_HOST=${SSH_REMOTE_HOST}
       - SSH_REMOTE_PORT=${SSH_REMOTE_PORT}
       - SSH_TARGET_HOST=${LOCALHOST}
