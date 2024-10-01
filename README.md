@@ -13,9 +13,9 @@ I use this repo to provide a self-hosted Overleaf instance for myself, with GitH
 The following commands will prepare the Overleaf container with our LDAP/OAuth2 customizations:
 
 ```
-cd ldap-overleaf-sl
 bash scripts/extract_files.sh 5.0.6
 bash scripts/apply_diffs.sh
+cd ldap-overleaf-sl
 docker build -t ldap-overleaf-sl:5.0.6 .
 ```
 
