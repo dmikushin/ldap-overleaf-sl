@@ -1,33 +1,40 @@
 version: "2.2"
 services:
-  sharelatex:
+  overleaf:
     restart: always
-    image: ldap-overleaf-sl
+    image: ldap-overleaf-sl:5.0.6
     container_name: ldap-overleaf-sl
     depends_on:
       mongo:
         condition: service_healthy
       redis:
         condition: service_healthy
+      autossh:
+        condition: service_started
     privileged: false
     ports:
-      - 80:80
+      - ${LOCALHOST}:${LOCALPORT}:80
     links:
       - mongo
       - redis
+      - git-bridge
+      - autossh
+    environment:
+      GIT_BRIDGE_ENABLED: true
+      GIT_BRIDGE_HOST: "git-bridge"
+      GIT_BRIDGE_PORT: "8000"
+      V1_HISTORY_URL: "http://overleaf:3100/api"
     volumes:
-      - ${MYDATA}/sharelatex:/var/lib/overleaf
-      - ${MYDATA}/letsencrypt:/etc/letsencrypt
-      - ${MYDATA}/letsencrypt/live/${MYDOMAIN}/:/etc/letsencrypt/certs/domain
+      - ${MYDATA}/overleaf:/var/lib/overleaf
     environment:
       OVERLEAF_APP_NAME: Overleaf
-      OVERLEAF_MONGO_URL: mongodb://mongo/sharelatex
+      OVERLEAF_MONGO_URL: mongodb://mongo/overleaf
       OVERLEAF_SITE_URL: https://${MYDOMAIN}
       OVERLEAF_NAV_TITLE: Overleaf - run by ${MYDOMAIN}
       #OVERLEAF_HEADER_IMAGE_URL: https://${MYDOMAIN}/logo.svg
       OVERLEAF_ADMIN_EMAIL: ${MYMAIL}
-      OVERLEAF_LEFT_FOOTER: '[{"text": "Powered by <a href=\"https://www.sharelatex.com\">ShareLaTeX</a> 2016"} ]'
-      OVERLEAF_RIGHT_FOOTER: '[{"text": "LDAP Overleaf (beta)"} ]'
+      OVERLEAF_LEFT_FOOTER: '[{"text": "Self-hosted instance} ]'
+      OVERLEAF_RIGHT_FOOTER: '[{"text": "<a href=\"https://github.com/smhaller/ldap-overleaf-sl\">OAuth2 Overleaf Community Edition</a>"} ]'
       OVERLEAF_EMAIL_FROM_ADDRESS: "noreply@${MYDOMAIN}"
       # OVERLEAF_EMAIL_AWS_SES_ACCESS_KEY_ID:
       # OVERLEAF_EMAIL_AWS_SES_SECRET_KEY:
@@ -50,11 +57,10 @@ services:
 
       # Uncomment the following line to enable secure cookies if you are using SSL
       # OVERLEAF_SECURE_COOKIE: "true"
-      # OVERLEAF_BEHIND_PROXY: "true"
+      OVERLEAF_BEHIND_PROXY: "true"
 
       LDAP_SERVER: ldaps://LDAPSERVER:636
       LDAP_BASE: ou=people,dc=DOMAIN,dc=TLD
-      LDAP_SERVER_CACERT: /etc/ssl/certs/LDAPCERT
 
       ### There are to ways get users from the ldap server
 
@@ -74,27 +80,27 @@ services:
       # when ALLOW_EMAIL_LOGIN is set to 'true'. Additionally admins can send
       # system wide messages.
       LDAP_ADMIN_GROUP_FILTER: "(memberof=cn=ADMINGROUPNAME,ou=groups,dc=DOMAIN,dc=TLD)"
-      ALLOW_EMAIL_LOGIN: "true"
+      ALLOW_EMAIL_LOGIN: "false"
 
       # All users in the LDAP_CONTACT_FILTER are loaded from the ldap server into contacts.
       LDAP_CONTACT_FILTER: "(memberof=cn=GROUPNAME,ou=groups,dc=DOMAIN,dc=TLD)"
       LDAP_CONTACTS: "false"
 
       ## OAuth2 Settings
-      # OAUTH2_ENABLED: "true"
-      # OAUTH2_PROVIDER: YOUR_OAUTH2_PROVIDER
-      # OAUTH2_CLIENT_ID: YOUR_OAUTH2_CLIENT_ID
-      # OAUTH2_CLIENT_SECRET: YOUR_OAUTH2_CLIENT_SECRET
-      # OAUTH2_SCOPE: YOUR_OAUTH2_SCOPE
-      # OAUTH2_AUTHORIZATION_URL: YOUR_OAUTH2_AUTHORIZATION_URL
-      # OAUTH2_TOKEN_URL: YOUR_OAUTH2_TOKEN_URL
-      # OAUTH2_TOKEN_CONTENT_TYPE: # One of ['application/x-www-form-urlencoded', 'application/json']
-      # OAUTH2_PROFILE_URL: YOUR_OAUTH2_PROFILE_URL
-      # OAUTH2_USER_ATTR_EMAIL: email
-      # OAUTH2_USER_ATTR_UID: id
-      # OAUTH2_USER_ATTR_FIRSTNAME: name
-      # OAUTH2_USER_ATTR_LASTNAME:
-      # OAUTH2_USER_ATTR_IS_ADMIN: site_admin
+      OAUTH2_ENABLED: "true"
+      OAUTH2_PROVIDER: https://github.com
+      OAUTH2_CLIENT_ID: ${OAUTH2_CLIENT_ID}
+      OAUTH2_CLIENT_SECRET: ${OAUTH2_CLIENT_SECRET}
+      OAUTH2_SCOPE: public
+      OAUTH2_AUTHORIZATION_URL: https://github.com/login/oauth/authorize
+      OAUTH2_TOKEN_URL: https://github.com/login/oauth/access_token
+      OAUTH2_TOKEN_CONTENT_TYPE: "application/x-www-form-urlencoded"
+      OAUTH2_PROFILE_URL: https://api.github.com/user
+      OAUTH2_USER_ATTR_EMAIL: email
+      OAUTH2_USER_ATTR_UID: id
+      OAUTH2_USER_ATTR_FIRSTNAME: name
+      OAUTH2_USER_ATTR_LASTNAME:
+      OAUTH2_USER_ATTR_IS_ADMIN: site_admin
 
       # Same property, unfortunately with different names in
       # different locations
@@ -152,3 +158,35 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  git-bridge:
+    restart: always
+    image: quay.io/sharelatex/git-bridge:5.0.6 # tag should match the `sharelatex` container tag
+    volumes:
+        - ${MYDATA}/git_bridge_data:/data/git-bridge
+    container_name: git-bridge
+    expose:
+        - "8000"
+    environment:
+        GIT_BRIDGE_API_BASE_URL: "http://overleaf:3000/api/v0/"
+        GIT_BRIDGE_OAUTH2_SERVER: "http://overleaf"
+        GIT_BRIDGE_POSTBACK_BASE_URL: "http://git-bridge:8000"
+        GIT_BRIDGE_ROOT_DIR: "/data/git-bridge"
+    user: root
+    command: ["/server-pro-start.sh"]
+
+  autossh:
+    image: autossh
+    environment:
+      - SSH_REMOTE_USER=${SSH_REMOVE_USER}
+      - SSH_REMOTE_HOST=${SSH_REMOTE_HOST}
+      - SSH_REMOTE_PORT=${SSH_REMOTE_PORT}
+      - SSH_TARGET_HOST=${LOCALHOST}
+      - SSH_TARGET_PORT=${LOCALPORT}
+      - SSH_TUNNEL_PORT=${SSH_TUNNEL_PORT}
+      - SSH_OPTIONS=-o ConnectTimeout=10 -o StreamLocalBindUnlink=yes -o UseRoaming=no
+      - TUNNEL_SECRET=
+      - TUNNEL_REMOTE_ID=
+    restart: always
+    volumes:
+      - ${PWD}/id_rsa:/id_rsa
