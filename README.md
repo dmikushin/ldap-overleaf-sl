@@ -30,7 +30,7 @@ docker build -t ldap-overleaf-sl:5.0.6 .
 docker-compose up -d
 ```
 
-3. For Git integration, run the following in the Mongo container shell:
+3. For Git integration, launch the `mongo` shell in the Mongo container and execute the following in it:
 
 ```
 db.oauthApplications.insert({
@@ -46,6 +46,13 @@ db.oauthApplications.insert({
   ]
 })
 ```
+
+It will be committed automatically with the following response:
+
+```
+WriteResult({ "nInserted" : 1 })
+```
+
 
 4. Restart Docker containers:
 
